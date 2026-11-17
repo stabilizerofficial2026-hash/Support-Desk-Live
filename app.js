@@ -1,151 +1,555 @@
-const SUPABASE_URL = "https://keknignerubsxxtzvrog.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_8WKlYGyXbxb33SoWmtMXtw_9bC8pxVW";
-const configured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
-const db = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-const $ = (id) => document.getElementById(id);
-const show = (id) => { ["welcome","chat","staff-login","inbox"].forEach(x => $(x).classList.toggle("hidden", x !== id)); };
-let conversationId = null, currentUser = null, selectedConversation = null, messageChannel = null, listChannel = null;
 
-const FAQ = [
-  {keys:["hour","open","available","time"], answer:"Our automated support is available anytime. A human CSR will reply when an agent is online. Human response times depend on agent availability."},
-  {keys:["bill","payment","refund","charge"], answer:"For billing help, tell us the date and a short description of the transaction. Never send your full card number, password, or one-time code."},
-  {keys:["account","login","password","subscriber"], answer:"For account help, describe the issue and include the email linked to your account. Never share your password or verification code."},
-  {keys:["human","agent","csr","person","representative"], answer:"I'll notify the support queue so an available customer service representative can assist you."}
+// ============================================
+// SUPPORTDESK LIVE
+// Guest Chat + Single Administrator Dashboard
+// ============================================
+
+const SUPABASE_URL =
+  "https://keknignerubsxxtzvrog.supabase.co";
+
+const SUPABASE_ANON_KEY =
+  "sb_publishable_8WKlYGyXbxb33SoWmtMXtw_9bC8pxVW";
+
+const configured = Boolean(
+  SUPABASE_URL &&
+  SUPABASE_ANON_KEY &&
+  window.supabase
+);
+
+const db = configured
+  ? window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    )
+  : null;
+
+const $ = id => document.getElementById(id);
+
+const screens = [
+  "welcome",
+  "chat",
+  "staff-login",
+  "inbox"
 ];
-function faqAnswer(text) { const t=text.toLowerCase(); const hit=FAQ.find(x=>x.keys.some(k=>t.includes(k))); return hit?.answer || "Thanks for your message. I've added it to the conversation. A support representative will respond when available."; }
-function addBubble(container, body, mine=false, bot=false, time=new Date()) {
-  const el=document.createElement("div"); el.className="bubble"+(mine?" mine":"")+(bot?" bot":"");
-  const text=document.createElement("div"); text.textContent=body; el.append(text);
-  const meta=document.createElement("small"); meta.textContent=(bot?"Automated assistant":mine?"You":"Support team")+" · "+new Date(time).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); el.append(meta);
-  container.append(el); container.scrollTop=container.scrollHeight;
+
+function show(id) {
+  screens.forEach(screen => {
+    const el = $(screen);
+    if (el) el.classList.toggle("hidden", screen !== id);
+  });
 }
-function demoNotice(){ $("setup-note").textContent="Preview mode: connect Supabase to enable persistent live conversations."; }
+
+let conversationId = null;
+let currentUser = null;
+let selectedConversation = null;
+let messageChannel = null;
+let listChannel = null;
+
+let guestName = "";
+
+
+// ============================================
+// GENERAL HELPERS
+// ============================================
+
+function setBusy(button, busy, text) {
+  if (!button) return;
+
+  button.disabled = busy;
+
+  if (busy) {
+    button.dataset.originalText =
+      button.textContent;
+    button.textContent = text || "Please wait...";
+  } else {
+    button.textContent =
+      button.dataset.originalText || "Send";
+  }
+}
+
+function addBubble(
+  container,
+  body,
+  mine = false,
+  bot = false,
+  time = new Date()
+) {
+  if (!container) return;
+
+  const bubble = document.createElement("div");
+
+  bubble.className =
+    "bubble" +
+    (mine ? " mine" : "") +
+    (bot ? " bot" : "");
+
+  const text = document.createElement("div");
+  text.textContent = body;
+
+  const meta = document.createElement("small");
+
+  const sender = bot
+    ? "Automated assistant"
+    : mine
+      ? "You"
+      : "Support team";
+
+  meta.textContent =
+    sender +
+    " · " +
+    new Date(time).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
+  bubble.append(text, meta);
+  container.append(bubble);
+
+  container.scrollTop = container.scrollHeight;
+}
+
+function showError(elementId, message) {
+  const el = $(elementId);
+  if (el) el.textContent = message;
+}
+
+
+// ============================================
+// GUEST AUTHENTICATION
+// ============================================
 
 async function ensureGuest() {
-  const { data: { session }, error } = await db.auth.getSession();
+  const {
+    data: { session },
+    error
+  } = await db.auth.getSession();
+
   if (error) throw error;
 
-  // Do not reuse an administrator or staff session as a guest.
-  if (session && session.user.is_anonymous !== true) {
+  // Never use an administrator session as a guest.
+  if (session && !session.user.is_anonymous) {
     await db.auth.signOut();
   }
 
-  const { data, error: signInError } =
-    await db.auth.signInAnonymously();
+  const {
+    data,
+    error: signInError
+  } = await db.auth.signInAnonymously();
 
   if (signInError) throw signInError;
-  if (!data.user || data.user.is_anonymous !== true) {
-    throw new Error("Could not establish an anonymous guest session.");
+
+  if (!data.user || !data.user.is_anonymous) {
+    throw new Error(
+      "Unable to establish a guest session."
+    );
   }
 
   return data.user;
 }
 
-async function loadMessages(id, target=$("messages"), guest=true) {
-  target.innerHTML="";
-  const {data,error}=await db.from("messages").select("id,body,sender_role,created_at").eq("conversation_id",id).eq("visibility","public").order("created_at",{ascending:true}).limit(100);
-  if(error) throw error;
-  data.forEach(m=>addBubble(target,m.body,m.sender_role==="customer" && guest,m.sender_role==="bot",m.created_at));
-  if(messageChannel) await db.removeChannel(messageChannel);
-  messageChannel=db.channel("messages-"+id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:"conversation_id=eq."+id},payload=>{
-    const m=payload.new; if(m.visibility==="public") addBubble(target,m.body,m.sender_role==="customer" && guest,m.sender_role==="bot",m.created_at);
-  }).subscribe();
-}
-$("guest-form").addEventListener("submit",async e=>{
-  e.preventDefault();
-  if(!configured){show("chat");$("messages").innerHTML="";addBubble($("messages"),"Welcome! This is a preview. Connect Supabase to start a real conversation.",false,true);return;}
-  try{
-    currentUser=await ensureGuest();
-    const name=$("guest-name").value.trim(), email=$("guest-email").value.trim(), topic=$("guest-topic").value;
-    const {error:profileError}=await db.from("guest_profiles").upsert({user_id:currentUser.id,full_name:name,email,topic},{onConflict:"user_id"});
-    if(profileError) throw profileError;
-    const {data:conv,error}=await db.rpc("create_guest_conversation",{p_subject:topic});
-    if(error) throw error;
-    conversationId=conv; sessionStorage.setItem("supportdesk_conversation",conversationId);
-    show("chat"); await loadMessages(conversationId);
-    $("chat-subtitle").textContent="Conversation started for "+name;
-    addBubble($("messages"),"Hello "+name+"! Welcome to support. You can ask a question or choose a quick topic below.",false,true);
-  }catch(err){alert("Unable to start chat: "+err.message);}
-});
 
-$("message-form").addEventListener("submit", async e => {
-  e.preventDefault();
+// ============================================
+// LOAD CHAT MESSAGES
+// ============================================
 
-  const input = $("message-input");
-  const body = input.value.trim();
+async function loadMessages(
+  id,
+  target,
+  guest = true
+) {
+  if (!id || !target) return;
 
-  if (!body || !conversationId || !currentUser) return;
+  target.innerHTML = "";
 
-  const button = $("message-form")
-    .querySelector('button[type="submit"]');
+  const { data, error } = await db
+    .from("messages")
+    .select(
+      "id,body,sender_id,sender_role,visibility,created_at"
+    )
+    .eq("conversation_id", id)
+    .eq("visibility", "public")
+    .order("created_at", { ascending: true })
+    .limit(100);
 
-  setBusy(button, true, "Sending...");
+  if (error) throw error;
 
-  try {
-    const { error } = await db.from("messages").insert({
-      conversation_id: conversationId,
-      sender_id: currentUser.id,
-      body,
-      sender_role: "customer",
-      visibility: "public"
-    });
+  data.forEach(message => {
+    addBubble(
+      target,
+      message.body,
+      guest
+        ? message.sender_role === "customer"
+        : message.sender_role !== "customer" &&
+          message.sender_role !== "bot",
+      message.sender_role === "bot",
+      message.created_at
+    );
+  });
 
-    if (error) throw error;
-
-    input.value = "";
-  } catch (error) {
-    alert("Message not sent: " + error.message);
-  } finally {
-    setBusy(button, false);
+  if (messageChannel) {
+    await db.removeChannel(messageChannel);
   }
-});
 
-  if(error){alert("Message not sent: "+error.message);return;}
-  $("message-input").value="";
-  // FAQ answer is advisory UI automation. Human handoff and durable bot replies should be handled by a trusted Edge Function.
-  const answer=faqAnswer(body);
-  const {data:faqs}=await db.from("faq_entries").select("question,answer,keywords").eq("active",true).limit(50);
-  const matched=faqs?.find(f=>(f.keywords||[]).some(k=>body.toLowerCase().includes(String(k).toLowerCase())));
-  addBubble($("messages"),matched?.answer||answer,false,true);
-});
-document.querySelectorAll("[data-faq]").forEach(b=>b.addEventListener("click",()=>{const map={hours:"What are your support hours?",billing:"I need help with billing or payment.",account:"I need help with my account."};$("message-input").value=map[b.dataset.faq];$("message-input").focus();}));
-$("staff-form").addEventListener("submit",async e=>{
-  e.preventDefault();if(!configured){$("staff-error").textContent="Connect Supabase first.";return;}
-  const {data,error}=await db.auth.signInWithPassword({email:$("staff-email").value,password:$("staff-password").value});
-  if(error){$("staff-error").textContent=error.message;return;}
-  const {data:profile,error:pErr}=await db.from("staff_profiles").select("display_name,role,active").eq("user_id",data.user.id).single();
-  if (pErr || !profile?.active || profile.role !== "admin") {
-  await db.auth.signOut();
-  $("staff-error").textContent = "Only the active administrator can log in.";
-  return;
+  messageChannel = db
+    .channel("messages-" + id)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: "conversation_id=eq." + id
+      },
+      payload => {
+        const message = payload.new;
+
+        if (message.visibility !== "public") return;
+
+        addBubble(
+          target,
+          message.body,
+          guest
+            ? message.sender_role === "customer"
+            : message.sender_role !== "customer" &&
+              message.sender_role !== "bot",
+          message.sender_role === "bot",
+          message.created_at
+        );
+      }
+    )
+    .subscribe();
 }
+
+
+// ============================================
+// GUEST START CONVERSATION
+// ============================================
+
+if ($("guest-form")) {
+  $("guest-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      if (!configured) {
+        alert("Supabase is not configured.");
+        return;
+      }
+
+      const button = $("guest-form")
+        .querySelector('button[type="submit"]');
+
+      setBusy(button, true, "Starting...");
+
+      try {
+        currentUser = await ensureGuest();
+
+        const name =
+          $("guest-name").value.trim();
+
+        const email =
+          $("guest-email").value.trim();
+
+        const topic =
+          $("guest-topic").value;
+
+        if (!name || !email) {
+          throw new Error(
+            "Please enter your name and email."
+          );
+        }
+
+        guestName = name;
+
+        const { error: profileError } = await db
+          .from("guest_profiles")
+          .upsert(
+            {
+              user_id: currentUser.id,
+              full_name: name,
+              email: email,
+              topic: topic
+            },
+            {
+              onConflict: "user_id"
+            }
+          );
+
+        if (profileError) throw profileError;
+
+        const {
+          data: conversation,
+          error
+        } = await db.rpc(
+          "create_guest_conversation",
+          {
+            p_subject: topic
+          }
+        );
+
+        if (error) throw error;
+
+        conversationId = conversation;
+
+        sessionStorage.setItem(
+          "supportdesk_conversation",
+          conversationId
+        );
+
+        show("chat");
+
+        if ($("chat-subtitle")) {
+          $("chat-subtitle").textContent =
+            "Conversation started for " + name;
+        }
+
+        await loadMessages(
+          conversationId,
+          $("messages"),
+          true
+        );
+
+        addBubble(
+          $("messages"),
+          "Hello " + name +
+          "! Welcome to SupportDesk Live. " +
+          "How may I assist you today?",
+          false,
+          true
+        );
+
+      } catch (error) {
+        alert(
+          "Unable to start chat: " +
+          error.message
+        );
+      } finally {
+        setBusy(button, false);
+      }
+    }
+  );
+}
+
+
+// ============================================
+// GUEST SEND MESSAGE
+// Uses secure Supabase RPC
+// ============================================
+
+if ($("message-form")) {
+  $("message-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      const input = $("message-input");
+      const body = input.value.trim();
+
+      if (!body || !conversationId || !currentUser) {
+        return;
+      }
+
+      const button = $("message-form")
+        .querySelector('button[type="submit"]');
+
+      setBusy(button, true, "Sending...");
+
+      try {
+        const { error } = await db.rpc(
+          "guest_send_message",
+          {
+            p_conversation_id: conversationId,
+            p_body: body
+          }
+        );
+
+        if (error) throw error;
+
+        input.value = "";
+
+      } catch (error) {
+        alert(
+          "Message not sent: " +
+          error.message
+        );
+      } finally {
+        setBusy(button, false);
+      }
+    }
+  );
+}
+
+
+// ============================================
+// QUICK FAQ BUTTONS
+// ============================================
+
+document
+  .querySelectorAll("[data-faq]")
+  .forEach(button => {
+    button.addEventListener("click", () => {
+
+      const questions = {
+        hours: "What are your support hours?",
+        billing:
+          "I need help with billing or payment.",
+        account:
+          "I need help with my account."
+      };
+
+      const input = $("message-input");
+
+      if (!input) return;
+
+      input.value =
+        questions[button.dataset.faq] || "";
+
+      input.focus();
+    });
+  });
+
+
+// ============================================
+// ADMIN LOGIN
+// Only active administrator is allowed
+// ============================================
+
+if ($("staff-form")) {
+  $("staff-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      if (!configured) {
+        showError(
+          "staff-error",
+          "Supabase is not configured."
+        );
+        return;
+      }
+
+      const button = $("staff-form")
+        .querySelector('button[type="submit"]');
+
+      setBusy(button, true, "Signing in...");
+
+      try {
+        const {
+          data,
+          error
+        } = await db.auth.signInWithPassword({
+          email: $("staff-email").value.trim(),
+          password: $("staff-password").value
+        });
+
+        if (error) throw error;
+
+        const {
+          data: profile,
+          error: profileError
+        } = await db
+          .from("staff_profiles")
+          .select(
+            "display_name,role,active"
+          )
+          .eq("user_id", data.user.id)
+          .single();
+
+        if (
+          profileError ||
+          !profile ||
+          profile.active !== true ||
+          profile.role !== "admin"
+        ) {
+          await db.auth.signOut();
+
+          throw new Error(
+            "Only the active administrator can log in."
+          );
+        }
+
+        currentUser = data.user;
+
+        show("inbox");
+
+        if ($("staff-identity")) {
+          $("staff-identity").textContent =
+            profile.display_name +
+            " · Administrator";
+        }
+
+        await loadInbox();
+
+      } catch (error) {
+        showError(
+          "staff-error",
+          error.message
+        );
+      } finally {
+        setBusy(button, false);
+      }
+    }
+  );
+}
+
+
+// ============================================
+// ADMIN CONVERSATION INBOX
+// No foreign-key join required
+// ============================================
+
 async function loadInbox() {
-  const { data: conversations, error } = await db
+  if (!db) return;
+
+  const list = $("conversation-list");
+
+  if (!list) return;
+
+  list.textContent = "Loading conversations...";
+
+  const {
+    data: conversations,
+    error
+  } = await db
     .from("conversations")
-    .select("id,guest_user_id,subject,status,created_at,updated_at")
-    .in("status", ["queued", "open", "pending"])
-    .order("updated_at", { ascending: false })
+    .select(
+      "id,guest_user_id,subject,status,created_at,updated_at"
+    )
+    .in(
+      "status",
+      ["queued", "open", "pending"]
+    )
+    .order(
+      "updated_at",
+      { ascending: false }
+    )
     .limit(50);
 
   if (error) {
-    $("conversation-list").textContent = error.message;
+    list.textContent = error.message;
     return;
   }
 
-  const guestIds = [...new Set(
-    conversations.map(c => c.guest_user_id).filter(Boolean)
-  )];
+  const guestIds = [
+    ...new Set(
+      conversations
+        .map(item => item.guest_user_id)
+        .filter(Boolean)
+    )
+  ];
 
   let guests = [];
 
   if (guestIds.length) {
     const result = await db
       .from("guest_profiles")
-      .select("user_id,full_name,email")
+      .select(
+        "user_id,full_name,email"
+      )
       .in("user_id", guestIds);
 
     if (result.error) {
-      $("conversation-list").textContent = result.error.message;
+      list.textContent = result.error.message;
       return;
     }
 
@@ -153,105 +557,342 @@ async function loadInbox() {
   }
 
   const guestMap = new Map(
-    guests.map(g => [g.user_id, g])
+    guests.map(guest => [
+      guest.user_id,
+      guest
+    ])
   );
 
-  $("conversation-list").innerHTML = "";
+  list.innerHTML = "";
 
-  conversations.forEach(c => {
-    const guest = guestMap.get(c.guest_user_id) || {};
+  conversations.forEach(conversation => {
+    const guest =
+      guestMap.get(conversation.guest_user_id) || {};
 
     const item = document.createElement("button");
+
     item.className = "conversation-item";
 
     const title = document.createElement("b");
-    title.textContent = guest.full_name || "Guest";
 
-    const sub = document.createElement("small");
-    sub.textContent = (c.subject || "Support") + " · " + c.status;
+    title.textContent =
+      guest.full_name || "Guest";
 
-    item.append(title, sub);
+    const subtitle = document.createElement("small");
+
+    subtitle.textContent =
+      (conversation.subject || "Support") +
+      " · " +
+      conversation.status;
+
+    item.append(title, subtitle);
 
     item.addEventListener("click", () => {
-      openAgentConversation({ ...c, guest_profiles: guest });
+      openAgentConversation({
+        ...conversation,
+        guest_profiles: guest
+      });
     });
 
-    $("conversation-list").append(item);
+    list.append(item);
   });
 
   if (!conversations.length) {
-    $("conversation-list").textContent = "No active conversations.";
+    list.textContent =
+      "No active conversations.";
   }
 
-  if (listChannel) await db.removeChannel(listChannel);
+  if (listChannel) {
+    await db.removeChannel(listChannel);
+  }
 
-  listChannel = db.channel("conversation-list")
-    .on("postgres_changes", {
-      event: "*",
-      schema: "public",
-      table: "conversations"
-    }, () => loadInbox())
+  listChannel = db
+    .channel("conversation-list")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "conversations"
+      },
+      () => {
+        loadInbox();
+      }
+    )
     .subscribe();
 }
 
-async function openAgentConversation(c){
-  selectedConversation=c;$("agent-thread-title").textContent=(c.guest_profiles?.full_name||"Guest")+" · "+(c.guest_profiles?.email||"");
-  $("resolve-chat").disabled=false;$("take-chat").disabled=false;
-  const {data,error}=await db.from("messages").select("id,body,sender_role,visibility,created_at").eq("conversation_id",c.id).order("created_at").limit(100);
-  if(error){alert(error.message);return;}
-  $("agent-messages").innerHTML="";
-  data.filter(m=>m.visibility==="public"||m.visibility==="internal").forEach(m=>addBubble($("agent-messages"),(m.visibility==="internal"?"[INTERNAL NOTE] ":"")+m.body,m.sender_role!=="customer",m.sender_role==="bot",m.created_at));
-  if(messageChannel)await db.removeChannel(messageChannel);
-  messageChannel=db.channel("agent-"+c.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:"conversation_id=eq."+c.id},p=>addBubble($("agent-messages"),p.new.body,p.new.sender_role!=="customer",p.new.sender_role==="bot",p.new.created_at)).subscribe();
+
+// ============================================
+// ADMIN OPEN CONVERSATION
+// ============================================
+
+async function openAgentConversation(conversation) {
+  selectedConversation = conversation;
+
+  const guest =
+    conversation.guest_profiles || {};
+
+  if ($("agent-thread-title")) {
+    $("agent-thread-title").textContent =
+      (guest.full_name || "Guest") +
+      " · " +
+      (guest.email || "");
+  }
+
+  if ($("resolve-chat")) {
+    $("resolve-chat").disabled = false;
+  }
+
+  if ($("take-chat")) {
+    $("take-chat").disabled = true;
+    $("take-chat").classList.add("hidden");
+  }
+
+  const target = $("agent-messages");
+
+  if (!target) return;
+
+  target.innerHTML = "Loading messages...";
+
+  const {
+    data,
+    error
+  } = await db
+    .from("messages")
+    .select(
+      "id,body,sender_role,visibility,created_at"
+    )
+    .eq(
+      "conversation_id",
+      conversation.id
+    )
+    .order("created_at", {
+      ascending: true
+    })
+    .limit(100);
+
+  if (error) {
+    target.textContent = error.message;
+    return;
+  }
+
+  target.innerHTML = "";
+
+  data.forEach(message => {
+    if (
+      message.visibility !== "public" &&
+      message.visibility !== "internal"
+    ) {
+      return;
+    }
+
+    addBubble(
+      target,
+      message.visibility === "internal"
+        ? "[INTERNAL NOTE] " + message.body
+        : message.body,
+      message.sender_role !== "customer" &&
+      message.sender_role !== "bot",
+      message.sender_role === "bot",
+      message.created_at
+    );
+  });
+
+  if (messageChannel) {
+    await db.removeChannel(messageChannel);
+  }
+
+  messageChannel = db
+    .channel("admin-messages-" + conversation.id)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter:
+          "conversation_id=eq." +
+          conversation.id
+      },
+      payload => {
+        const message = payload.new;
+
+        if (
+          message.visibility !== "public" &&
+          message.visibility !== "internal"
+        ) return;
+
+        addBubble(
+          target,
+          message.visibility === "internal"
+            ? "[INTERNAL NOTE] " + message.body
+            : message.body,
+          message.sender_role !== "customer" &&
+          message.sender_role !== "bot",
+          message.sender_role === "bot",
+          message.created_at
+        );
+      }
+    )
+    .subscribe();
 }
 
-$("agent-message-form").addEventListener("submit", async e => {
-  e.preventDefault();
 
-  if (!selectedConversation || !currentUser) return;
+// ============================================
+// ADMIN SEND REPLY
+// Uses secure administrator RPC
+// ============================================
 
-  const input = $("agent-message-input");
-  const body = input.value.trim();
+if ($("agent-message-form")) {
+  $("agent-message-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
 
-  if (!body) return;
+      if (!selectedConversation || !currentUser) {
+        return;
+      }
 
-  const button = $("agent-message-form")
-    .querySelector('button[type="submit"]');
+      const input = $("agent-message-input");
+      const body = input.value.trim();
 
-  setBusy(button, true, "Sending...");
+      if (!body) return;
 
-  try {
-    const { error } = await db.from("messages").insert({
-      conversation_id: selectedConversation.id,
-      sender_id: currentUser.id,
-      body,
-      sender_role: "admin",
-      visibility: "public"
-    });
+      const button = $("agent-message-form")
+        .querySelector('button[type="submit"]');
 
-    if (error) throw error;
+      setBusy(button, true, "Sending...");
 
-    input.value = "";
-  } catch (error) {
-    alert("Reply not sent: " + error.message);
-  } finally {
-    setBusy(button, false);
+      try {
+        const { error } = await db.rpc(
+          "admin_send_reply",
+          {
+            p_conversation_id:
+              selectedConversation.id,
+            p_body: body
+          }
+        );
+
+        if (error) throw error;
+
+        input.value = "";
+
+      } catch (error) {
+        alert(
+          "Reply not sent: " +
+          error.message
+        );
+      } finally {
+        setBusy(button, false);
+      }
+    }
+  );
+}
+
+
+// ============================================
+// ADMIN RESOLVE CONVERSATION
+// ============================================
+
+if ($("resolve-chat")) {
+  $("resolve-chat").addEventListener(
+    "click",
+    async () => {
+      if (!selectedConversation) return;
+
+      const { error } = await db.rpc(
+        "admin_resolve_conversation",
+        {
+          p_conversation_id:
+            selectedConversation.id
+        }
+      );
+
+      if (error) {
+        alert(
+          "Unable to resolve: " +
+          error.message
+        );
+        return;
+      }
+
+      selectedConversation = null;
+
+      if ($("agent-thread-title")) {
+        $("agent-thread-title").textContent =
+          "Conversation resolved";
+      }
+
+      if ($("agent-messages")) {
+        $("agent-messages").innerHTML = "";
+      }
+
+      await loadInbox();
+    }
+  );
+}
+
+
+// ============================================
+// ADMIN SIGN OUT
+// ============================================
+
+if ($("signout")) {
+  $("signout").addEventListener(
+    "click",
+    async () => {
+      if (messageChannel) {
+        await db.removeChannel(messageChannel);
+        messageChannel = null;
+      }
+
+      if (listChannel) {
+        await db.removeChannel(listChannel);
+        listChannel = null;
+      }
+
+      await db.auth.signOut();
+
+      currentUser = null;
+      selectedConversation = null;
+
+      show("staff-login");
+    }
+  );
+}
+
+
+// ============================================
+// PAGE ROUTING
+// Guest: /
+// Admin: /#agent
+// ============================================
+
+function routePage() {
+  if (location.hash === "#agent") {
+    show("staff-login");
+  } else {
+    show("welcome");
   }
-});
+}
 
-  if(error){alert(error.message);return;}$("agent-message-input").value="";
-});
-$("take-chat").addEventListener("click",async()=>{
-  if(!selectedConversation)return;
-  const {error}=await db.rpc("assign_conversation_to_self",{p_conversation_id:selectedConversation.id});
-  if(error)alert(error.message);else{alert("Conversation assigned to you.");await loadInbox();}
-});
-$("resolve-chat").addEventListener("click",async()=>{
-  if(!selectedConversation)return;
-  const {error}=await db.from("conversations").update({status:"resolved"}).eq("id",selectedConversation.id);
-  if(error)alert(error.message);else{selectedConversation=null;$("agent-thread-title").textContent="Conversation resolved";$("agent-messages").innerHTML="";await loadInbox();}
-});
-$("signout").addEventListener("click",async()=>{await db.auth.signOut();show("staff-login");});
-const path=location.pathname;
-if(path==="/agent"||path==="/agent/")show("staff-login");else show("welcome");
-if(!configured)demoNotice();
+window.addEventListener(
+  "hashchange",
+  routePage
+);
+
+routePage();
+
+if (!configured) {
+  const note = $("setup-note");
+
+  if (note) {
+    note.textContent =
+      "Supabase connection is unavailable. Check your configuration.";
+  }
+}
+
+console.log(
+  "SupportDesk Live initialized."
+);
