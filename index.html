@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10233f">
+  <title>SupportDesk Live</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">S</span><span>SupportDesk <b>Live</b></span></a>
+    <span class="status"><i></i> Support center</span>
+  </header>
+
+  <main class="shell">
+    <section id="welcome" class="panel welcome">
+      <div class="eyebrow">CUSTOMER SUPPORT</div>
+      <h1>How can we help<br><span>you today?</span></h1>
+      <p class="muted">Start a conversation with our support team. If our team is offline, our automated FAQ assistant can still help and we'll keep your message in the queue.</p>
+      <div class="feature-row"><span>✓ Live CSR support</span><span>✓ Automated FAQs</span><span>✓ Secure conversations</span></div>
+      <form id="guest-form" class="form">
+        <label>Full name<input id="guest-name" required maxlength="80" autocomplete="name" placeholder="Your name"></label>
+        <label>Email address<input id="guest-email" required type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></label>
+        <label>What do you need help with?
+          <select id="guest-topic">
+            <option value="General question">General question</option>
+            <option value="Account or subscription">Account or subscription</option>
+            <option value="Billing or payment">Billing or payment</option>
+            <option value="Technical support">Technical support</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <button class="primary" type="submit">Start a conversation <span>→</span></button>
+        <p class="fine">By continuing, you agree that we may use your name and email to respond to this support request. Please don't send passwords or payment-card details.</p>
+      </form>
+      <p id="setup-note" class="notice">Demo preview: add your Supabase project settings to activate live chat.</p>
+    </section>
+
+    <section id="chat" class="panel chat-panel hidden">
+      <div class="chat-head">
+        <div><div class="eyebrow">SUPPORT CONVERSATION</div><h2 id="chat-title">We're here to help</h2><p id="chat-subtitle" class="muted small">A support representative will join as soon as available.</p></div>
+        <span class="live-pill"><i></i> Live support</span>
+      </div>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <div class="faq-strip"><span>Quick help:</span><button data-faq="hours">Support hours</button><button data-faq="billing">Billing</button><button data-faq="account">Account help</button></div>
+      <form id="message-form" class="composer">
+        <input id="message-input" maxlength="2000" autocomplete="off" placeholder="Write your message…" required>
+        <button class="primary send" type="submit" aria-label="Send message">Send ↑</button>
+      </form>
+      <p class="fine">Never share passwords, one-time codes, or full payment-card numbers in chat.</p>
+    </section>
+
+    <section id="staff-login" class="panel staff-panel hidden">
+      <div class="eyebrow">TEAM ACCESS</div><h2>CSR sign in</h2>
+      <p class="muted small">Staff accounts are created and assigned roles by an administrator.</p>
+      <form id="staff-form" class="form">
+        <label>Email<input id="staff-email" type="email" required autocomplete="username"></label>
+        <label>Password<input id="staff-password" type="password" required autocomplete="current-password"></label>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <p id="staff-error" class="error"></p>
+    </section>
+
+    <section id="inbox" class="panel inbox-panel hidden">
+      <div class="inbox-head"><div><div class="eyebrow">TEAM WORKSPACE</div><h2>CSR Inbox</h2><p id="staff-identity" class="muted small"></p></div><button id="signout" class="secondary">Sign out</button></div>
+      <div class="inbox-grid">
+        <aside><h3>Conversations</h3><div id="conversation-list" class="conversation-list"><p class="muted small">Loading conversations…</p></div></aside>
+        <section class="agent-thread"><div id="agent-thread-title" class="thread-title">Select a conversation</div><div id="agent-messages" class="messages agent-messages"></div>
+          <form id="agent-message-form" class="composer"><input id="agent-message-input" maxlength="2000" placeholder="Reply to customer…" required><button class="primary send">Reply ↑</button></form>
+          <div class="agent-actions"><button id="resolve-chat" class="secondary" disabled>Mark resolved</button><button id="take-chat" class="secondary" disabled>Assign to me</button></div>
+        </section>
+      </div>
+    </section>
+    <footer>SupportDesk Live · Customer care, made simple</footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
