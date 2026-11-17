@@ -69,18 +69,85 @@ $("staff-form").addEventListener("submit",async e=>{
   const {data,error}=await db.auth.signInWithPassword({email:$("staff-email").value,password:$("staff-password").value});
   if(error){$("staff-error").textContent=error.message;return;}
   const {data:profile,error:pErr}=await db.from("staff_profiles").select("display_name,role,active").eq("user_id",data.user.id).single();
-  if(pErr||!profile?.active||!["csr","supervisor","admin"].includes(profile.role)){await db.auth.signOut();$("staff-error").textContent="This account is not authorized as active support staff.";return;}
+  if(pErr||!profile?.active||![profile.role !== "admin"].includes(profile.role)){await db.auth.signOut();$("staff-error").textContent="This account is not authorized as active support staff.";return;}
   currentUser=data.user;show("inbox");$("staff-identity").textContent=profile.display_name+" · "+profile.role;await loadInbox();
 });
-async function loadInbox(){
-  const {data,error}=await db.from("conversations").select("id,subject,status,created_at,guest_profiles(full_name,email)").in("status",["queued","open","pending"]).order("updated_at",{ascending:false}).limit(50);
-  if(error){$("conversation-list").textContent=error.message;return;}
-  $("conversation-list").innerHTML="";
-  data.forEach(c=>{const b=document.createElement("button");b.className="conversation-item";const title=document.createElement("b");title.textContent=c.guest_profiles?.full_name||"Guest";const sub=document.createElement("small");sub.textContent=(c.subject||"Support")+" · "+c.status;b.append(title,sub);b.addEventListener("click",()=>openAgentConversation(c));$("conversation-list").append(b);});
-  if(!data.length)$("conversation-list").textContent="No active conversations.";
-  if(listChannel) await db.removeChannel(listChannel);
-  listChannel=db.channel("conversation-list").on("postgres_changes",{event:"*",schema:"public",table:"conversations"},loadInbox).subscribe();
+
+async function loadInbox() {
+  const { data: conversations, error } = await db
+    .from("conversations")
+    .select("id,guest_user_id,subject,status,created_at,updated_at")
+    .in("status", ["queued", "open", "pending"])
+    .order("updated_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    $("conversation-list").textContent = error.message;
+    return;
+  }
+
+  const guestIds = [...new Set(
+    conversations.map(c => c.guest_user_id).filter(Boolean)
+  )];
+
+  let guests = [];
+
+  if (guestIds.length) {
+    const result = await db
+      .from("guest_profiles")
+      .select("user_id,full_name,email")
+      .in("user_id", guestIds);
+
+    if (result.error) {
+      $("conversation-list").textContent = result.error.message;
+      return;
+    }
+
+    guests = result.data || [];
+  }
+
+  const guestMap = new Map(
+    guests.map(g => [g.user_id, g])
+  );
+
+  $("conversation-list").innerHTML = "";
+
+  conversations.forEach(c => {
+    const guest = guestMap.get(c.guest_user_id) || {};
+
+    const item = document.createElement("button");
+    item.className = "conversation-item";
+
+    const title = document.createElement("b");
+    title.textContent = guest.full_name || "Guest";
+
+    const sub = document.createElement("small");
+    sub.textContent = (c.subject || "Support") + " · " + c.status;
+
+    item.append(title, sub);
+
+    item.addEventListener("click", () => {
+      openAgentConversation({ ...c, guest_profiles: guest });
+    });
+
+    $("conversation-list").append(item);
+  });
+
+  if (!conversations.length) {
+    $("conversation-list").textContent = "No active conversations.";
+  }
+
+  if (listChannel) await db.removeChannel(listChannel);
+
+  listChannel = db.channel("conversation-list")
+    .on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "conversations"
+    }, () => loadInbox())
+    .subscribe();
 }
+
 async function openAgentConversation(c){
   selectedConversation=c;$("agent-thread-title").textContent=(c.guest_profiles?.full_name||"Guest")+" · "+(c.guest_profiles?.email||"");
   $("resolve-chat").disabled=false;$("take-chat").disabled=false;
