@@ -44,6 +44,7 @@ let currentUser = null;
 let selectedConversation = null;
 let messageChannel = null;
 let listChannel = null;
+let attachmentChannel = null;
 
 let guestName = "";
 
@@ -92,7 +93,7 @@ function addBubble(
     ? "Automated assistant"
     : mine
       ? "You"
-      : "Support team";
+      : "SupportDesk Team";
 
   meta.textContent =
     sender +
@@ -222,6 +223,165 @@ async function loadMessages(
 
 
 // ============================================
+// PRIVATE CONVERSATION ATTACHMENTS
+// Files are stored in a private bucket. Access is
+// controlled by Supabase Storage RLS and signed URLs.
+// ============================================
+
+const ATTACHMENT_BUCKET = "supportdesk-attachments";
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain"
+]);
+
+function formatFileSize(bytes) {
+  return bytes < 1024 * 1024
+    ? Math.max(1, Math.round(bytes / 1024)) + " KB"
+    : (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function safeFileName(name) {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "attachment";
+}
+
+async function loadAttachments(id, target) {
+  if (!id || !target) return;
+  target.textContent = "Loading files…";
+
+  const { data, error } = await db
+    .from("conversation_attachments")
+    .select("id,file_name,mime_type,size_bytes,storage_path,sender_role,created_at")
+    .eq("conversation_id", id)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    target.textContent = "Unable to load attachments: " + error.message;
+    return;
+  }
+
+  target.innerHTML = "";
+  if (!data || !data.length) {
+    target.textContent = "No files shared yet.";
+    target.classList.add("muted");
+    return;
+  }
+  target.classList.remove("muted");
+
+  for (const file of data) {
+    const { data: signed, error: urlError } = await db.storage
+      .from(ATTACHMENT_BUCKET)
+      .createSignedUrl(file.storage_path, 300);
+    if (urlError || !signed?.signedUrl) continue;
+
+    const card = document.createElement("div");
+    card.className = "attachment-card";
+    if (file.mime_type && file.mime_type.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = signed.signedUrl;
+      img.alt = file.file_name;
+      img.loading = "lazy";
+      card.append(img);
+    }
+    const details = document.createElement("div");
+    const link = document.createElement("a");
+    link.href = signed.signedUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = file.file_name;
+    const meta = document.createElement("small");
+    meta.textContent = formatFileSize(file.size_bytes) + " · " +
+      (file.sender_role === "admin" ? "SupportDesk Team" : "Customer");
+    details.append(link, meta);
+    card.append(details);
+    target.append(card);
+  }
+}
+
+async function uploadConversationAttachment(file, role, id, statusElement) {
+  if (!file || !id || !currentUser) return;
+  if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+    throw new Error("File type not allowed. Choose JPG, PNG, WEBP, PDF, DOC, DOCX, or TXT.");
+  }
+  if (file.size <= 0 || file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("File must be no larger than 5 MB.");
+  }
+
+  if (statusElement) statusElement.textContent = "Uploading " + file.name + "…";
+  const unique = (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const path = id + "/" + unique + "-" + safeFileName(file.name);
+
+  const { error: uploadError } = await db.storage
+    .from(ATTACHMENT_BUCKET)
+    .upload(path, file, {
+      contentType: file.type,
+      upsert: false
+    });
+  if (uploadError) throw uploadError;
+
+  const { error: metadataError } = await db
+    .from("conversation_attachments")
+    .insert({
+      conversation_id: id,
+      uploaded_by: currentUser.id,
+      sender_role: role,
+      file_name: file.name.slice(0, 255),
+      mime_type: file.type,
+      size_bytes: file.size,
+      storage_path: path
+    });
+
+  if (metadataError) {
+    await db.storage.from(ATTACHMENT_BUCKET).remove([path]);
+    throw metadataError;
+  }
+
+  if (statusElement) statusElement.textContent = "File shared successfully.";
+  await loadAttachments(id, $(role === "admin" ? "admin-attachments" : "guest-attachments"));
+}
+
+function watchAttachments(id, target) {
+  if (attachmentChannel) db.removeChannel(attachmentChannel);
+  attachmentChannel = db
+    .channel("attachments-" + id)
+    .on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "conversation_attachments",
+      filter: "conversation_id=eq." + id
+    }, () => loadAttachments(id, target))
+    .subscribe();
+}
+
+function wireAttachmentPicker(inputId, role, targetId, statusId) {
+  const input = $(inputId);
+  if (!input) return;
+  input.addEventListener("change", async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const id = role === "admin" ? selectedConversation?.id : conversationId;
+    try {
+      await uploadConversationAttachment(file, role, id, $(statusId));
+    } catch (error) {
+      alert("Attachment not sent: " + error.message);
+      if ($(statusId)) $(statusId).textContent = "Upload failed.";
+    } finally {
+      input.value = "";
+    }
+  });
+}
+
+wireAttachmentPicker("guest-file", "customer", "guest-attachments", "guest-upload-status");
+wireAttachmentPicker("admin-file", "admin", "admin-attachments", "admin-upload-status");
+
+// ============================================
 // GUEST START CONVERSATION
 // ============================================
 
@@ -307,6 +467,8 @@ if ($("guest-form")) {
           $("messages"),
           true
         );
+        await loadAttachments(conversationId, $("guest-attachments"));
+        watchAttachments(conversationId, $("guest-attachments"));
 
         addBubble(
           $("messages"),
@@ -718,6 +880,9 @@ async function openAgentConversation(conversation) {
     );
   });
 
+  await loadAttachments(conversation.id, $("admin-attachments"));
+  watchAttachments(conversation.id, $("admin-attachments"));
+
   if (messageChannel) {
     await db.removeChannel(messageChannel);
   }
@@ -869,6 +1034,10 @@ if ($("signout")) {
       if (listChannel) {
         await db.removeChannel(listChannel);
         listChannel = null;
+      }
+      if (attachmentChannel) {
+        await db.removeChannel(attachmentChannel);
+        attachmentChannel = null;
       }
 
       await db.auth.signOut();
