@@ -3,8 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#10233f">
-  <title>SupportDesk Live</title>
+  <meta name="theme-color" content="#071b36">
+  <meta name="description" content="Need assistance? We're happy to help. Connect with SupportDesk Live for customer support, automated assistance and secure conversations.">
+  <meta name="application-name" content="SupportDesk Live">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="SupportDesk Live">
+  <meta property="og:title" content="SupportDesk Live – Customer Support">
+  <meta property="og:description" content="Need assistance? We're happy to help. Connect with SupportDesk Live for customer support, automated assistance and secure conversations.">
+  <meta property="og:url" content="https://support-desk-live.pages.dev/">
+  <meta property="og:image" content="https://support-desk-live.pages.dev/social-preview.jpg">
+  <meta property="og:image:secure_url" content="https://support-desk-live.pages.dev/social-preview.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="SupportDesk Live customer support with secure conversations and automated assistance">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SupportDesk Live – Customer Support">
+  <meta name="twitter:description" content="Need assistance? We're happy to help. Connect with SupportDesk Live for customer support, automated assistance and secure conversations.">
+  <meta name="twitter:image" content="https://support-desk-live.pages.dev/social-preview.jpg">
+  <link rel="icon" type="image/png" sizes="512x512" href="./favicon.png">
+  <link rel="apple-touch-icon" href="./favicon.png">
+  <title>SupportDesk Live – Customer Support</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -36,12 +55,10 @@
       </div>
       <div id="messages" class="messages" aria-live="polite"></div>
       <div class="faq-strip"><span>Optional quick help:</span><button type="button" data-faq="hours">Support hours</button><button type="button" data-faq="billing">Billing</button><button type="button" data-faq="account">Account help</button></div>
-      <div class="attachment-area"><div class="attachment-head"><b>Files in this conversation</b><span>Private · up to 5 MB each</span></div><div id="guest-attachments" class="attachment-list"></div></div>
       <form id="message-form" class="composer guest-composer">
         <textarea id="message-input" maxlength="10000" rows="3" autocomplete="off" placeholder="Describe your concern in your own words…" aria-label="Your message" required></textarea>
-        <div class="composer-tools"><label class="file-button" for="guest-file">＋ Attach file</label><input id="guest-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"><button class="primary send" type="submit" aria-label="Send message">Send ↑</button></div>
+        <button class="primary send" type="submit" aria-label="Send message">Send ↑</button>
       </form>
-      <p id="guest-upload-status" class="upload-status" aria-live="polite"></p>
       <p id="message-count" class="message-count">0 / 10,000 characters</p>
       <p class="fine">Never share passwords, one-time codes, or full payment-card numbers in chat.</p>
     </section>
@@ -62,8 +79,7 @@
       <div class="inbox-grid">
         <aside><h3>Conversations</h3><div id="conversation-list" class="conversation-list"><p class="muted small">Loading conversations…</p></div></aside>
         <section class="agent-thread"><div id="agent-thread-title" class="thread-title">Select a conversation</div><div id="agent-messages" class="messages agent-messages"></div>
-          <div class="attachment-area agent-attachment-area"><div class="attachment-head"><b>Files in this conversation</b><span>Private · up to 5 MB each</span></div><div id="admin-attachments" class="attachment-list"></div></div><form id="agent-message-form" class="composer"><input id="agent-message-input" maxlength="10000" placeholder="Reply to customer…" required><div class="composer-tools"><label class="file-button" for="admin-file">＋ Attach file</label><input id="admin-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"><button class="primary send">Reply ↑</button></div></form>
-          <p id="admin-upload-status" class="upload-status" aria-live="polite"></p>
+          <form id="agent-message-form" class="composer"><input id="agent-message-input" maxlength="10000" placeholder="Reply to customer…" required><button class="primary send">Reply ↑</button></form>
           <div class="agent-actions"><button id="resolve-chat" class="secondary" disabled>Mark resolved</button><button id="take-chat" class="secondary" disabled>Assign to me</button></div>
         </section>
       </div>
