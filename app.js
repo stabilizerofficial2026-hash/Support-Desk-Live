@@ -750,7 +750,7 @@ if ($("staff-form")) {
             " · Administrator";
         }
 
-        await Promise.all([loadInbox(), loadAnalytics()]);
+        await Promise.all([loadInbox(), loadAnalytics(), loadMonthlyReports()]);
 
       } catch (error) {
         showError(
@@ -886,6 +886,140 @@ async function loadCsatAnalytics() {
 }
 
 if ($("refresh-csat")) $("refresh-csat").addEventListener("click", loadCsatAnalytics);
+
+// ============================================
+// MONTHLY REPORTS + ADMIN DATA BACKUP
+// Exports are generated in the signed-in admin browser.
+// No service-role key is used in the client.
+// ============================================
+let monthlyReportData = [];
+
+function reportCsvCell(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function renderMonthlyReports(rows) {
+  const body = $("monthly-report-rows");
+  if (!body) return;
+  body.innerHTML = "";
+  if (!rows.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 7;
+    td.textContent = "No monthly activity found for this period.";
+    tr.append(td); body.append(tr); return;
+  }
+  rows.forEach(row => {
+    const tr = document.createElement("tr");
+    const values = [
+      row.month,
+      Number(row.conversations || 0).toLocaleString(),
+      Number(row.customer_messages || 0).toLocaleString(),
+      Number(row.human_replies || 0).toLocaleString(),
+      formatDuration(row.avg_first_response_seconds),
+      row.average_rating == null ? "—" : Number(row.average_rating).toFixed(2) + " / 5",
+      Number(row.ratings_count || 0).toLocaleString()
+    ];
+    values.forEach(value => { const td = document.createElement("td"); td.textContent = value; tr.append(td); });
+    body.append(tr);
+  });
+}
+
+async function loadMonthlyReports() {
+  const status = $("reports-status");
+  if (status) status.textContent = "Loading monthly reports…";
+  const months = Number($("report-months")?.value || 6);
+  const { data, error } = await db.rpc("admin_get_monthly_reports", { p_months: months });
+  if (error) {
+    if (status) status.textContent = "Monthly reports unavailable: " + error.message;
+    return;
+  }
+  monthlyReportData = Array.isArray(data) ? data : [];
+  renderMonthlyReports(monthlyReportData);
+  if (status) status.textContent = "Report updated " + new Date().toLocaleString();
+}
+
+async function fetchAllAdminRows(table) {
+  const rows = [];
+  const pageSize = 1000;
+  const primaryKeys = { conversations: "id", messages: "id", guest_profiles: "user_id", customer_satisfaction: "id", conversation_attachments: "id", faq_entries: "id", audit_logs: "id" };
+  const sortColumns = { faq_entries: "updated_at" };
+  const sortColumn = sortColumns[table] || "created_at";
+  for (let offset = 0; offset < 50000; offset += pageSize) {
+    const { data, error } = await db.from(table).select("*")
+      .order(sortColumn, { ascending: true })
+      .order(primaryKeys[table], { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error("Backup stopped at " + table + ": " + error.message);
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) return rows;
+  }
+  throw new Error("Backup safety limit reached for " + table + ". Export smaller sets before continuing.");
+}
+
+async function downloadAdminDataBackup() {
+  if (!currentUser) { alert("Administrator session required."); return; }
+  const button = $("download-data-backup");
+  if (!confirm("Download a private backup of customer profiles, conversations, messages, ratings and attachment metadata to this device? Anyone with the downloaded file may be able to read customer information.")) return;
+  setBusy(button, true, "Preparing backup…");
+  const status = $("reports-status");
+  try {
+    const { data: profile, error: profileError } = await db.from("staff_profiles")
+      .select("display_name,role,active").eq("user_id", currentUser.id).single();
+    if (profileError || !profile || profile.active !== true || profile.role !== "admin") {
+      throw new Error("Active administrator verification failed.");
+    }
+    const tableNames = ["conversations", "messages", "guest_profiles", "customer_satisfaction", "conversation_attachments", "faq_entries", "audit_logs"];
+    const backup = {
+      product: "SupportDesk Live",
+      format_version: 1,
+      exported_at: new Date().toISOString(),
+      exported_by: profile.display_name || "SupportDesk Admin",
+      contents: {},
+      exclusions: [
+        "Private Storage file bytes are not included; only attachment metadata and storage paths are included.",
+        "Supabase Auth passwords, access tokens and service-role credentials are never exported.",
+        "The active administrator Auth account must be recovered separately through Supabase Auth if needed.",
+        "This JSON is a data archive for reference and recovery assistance, not an automatic one-click restore package."
+      ]
+    };
+    for (const table of tableNames) {
+      if (status) status.textContent = "Backing up " + table.replaceAll("_", " ") + "…";
+      backup.contents[table] = await fetchAllAdminRows(table);
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadTextFile("supportdesk-live-backup-" + stamp + ".json", JSON.stringify(backup, null, 2), "application/json;charset=utf-8");
+    if (status) status.textContent = "Backup downloaded successfully · " + tableNames.map(name => backup.contents[name].length + " " + name).join(" · ");
+  } catch (error) {
+    if (status) status.textContent = "Backup not completed: " + error.message;
+    alert("Backup not completed: " + error.message);
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+if ($("refresh-reports")) $("refresh-reports").addEventListener("click", loadMonthlyReports);
+if ($("report-months")) $("report-months").addEventListener("change", loadMonthlyReports);
+if ($("export-report-csv")) $("export-report-csv").addEventListener("click", () => {
+  if (!monthlyReportData.length) { alert("Load a monthly report first."); return; }
+  const headers = ["month", "conversations", "customer_messages", "human_replies", "avg_first_response_seconds", "average_rating", "ratings_count"];
+  const lines = [headers.join(","), ...monthlyReportData.map(row => headers.map(key => reportCsvCell(row[key])).join(","))];
+  downloadTextFile("supportdesk-monthly-report.csv", lines.join("\r\n"), "text/csv;charset=utf-8");
+});
+if ($("download-data-backup")) $("download-data-backup").addEventListener("click", downloadAdminDataBackup);
 
 if ($("refresh-analytics")) {
   $("refresh-analytics").addEventListener("click", loadAnalytics);

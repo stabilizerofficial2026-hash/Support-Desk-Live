@@ -107,6 +107,18 @@
         <div class="csat-feedback-wrap"><h4>Recent customer comments</h4><div id="csat-feedback" class="csat-feedback"><p class="muted small">No feedback yet.</p></div></div>
         <p id="csat-status" class="analytics-status" aria-live="polite"></p>
       </section>
+      <section class="reports-panel" aria-labelledby="reports-title">
+        <div class="reports-heading">
+          <div><h3 id="reports-title">Monthly performance reports</h3><p class="muted small">Conversation volume, human response performance and customer satisfaction</p></div>
+          <label class="report-filter-label" for="report-months">Period
+            <select id="report-months" class="report-filter"><option value="3">Last 3 months</option><option value="6" selected>Last 6 months</option><option value="12">Last 12 months</option></select>
+          </label>
+        </div>
+        <p id="reports-status" class="analytics-status" aria-live="polite">Loading monthly reports…</p>
+        <div class="report-actions"><button id="refresh-reports" class="secondary" type="button">Refresh reports</button><button id="export-report-csv" class="secondary" type="button">Export monthly CSV</button><button id="download-data-backup" class="primary" type="button">Download data backup</button></div>
+        <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Month</th><th>Conversations</th><th>Customer msgs</th><th>Human replies</th><th>Avg. first reply</th><th>Avg. rating</th><th>Ratings</th></tr></thead><tbody id="monthly-report-rows"><tr><td colspan="7">Loading report…</td></tr></tbody></table></div>
+        <p class="report-backup-note"><b>Backup note:</b> The data export contains conversation records, messages, guest profiles, ratings and attachment metadata. It does not include the actual private files, authentication passwords or a one-click restore. Store downloaded backups somewhere private. Download important attachment files separately from the admin conversation view.</p>
+      </section>
       <div class="inbox-grid">
         <aside><h3>Conversations</h3><div id="conversation-list" class="conversation-list"><p class="muted small">Loading conversations…</p></div></aside>
         <section class="agent-thread"><div id="agent-thread-title" class="thread-title">Select a conversation</div><div id="agent-messages" class="messages agent-messages"></div>
