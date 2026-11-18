@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#10233f">
   <title>SupportDesk Live</title>
   <link rel="stylesheet" href="./styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <header class="topbar">
@@ -18,20 +17,12 @@
     <section id="welcome" class="panel welcome">
       <div class="eyebrow">CUSTOMER SUPPORT</div>
       <h1>How can we help<br><span>you today?</span></h1>
-      <p class="muted">Start a conversation with our support team. If our team is offline, our automated FAQ assistant can still help and we'll keep your message in the queue.</p>
+      <p class="muted">Start a conversation about anything you need help with. Explain your concern in your own words. If the automated assistant cannot help, your message can be reviewed by our support team.</p>
       <div class="feature-row"><span>✓ Live CSR support</span><span>✓ Automated FAQs</span><span>✓ Secure conversations</span></div>
       <form id="guest-form" class="form">
         <label>Full name<input id="guest-name" required maxlength="80" autocomplete="name" placeholder="Your name"></label>
         <label>Email address<input id="guest-email" required type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></label>
-        <label>What do you need help with?
-          <select id="guest-topic">
-            <option value="General question">General question</option>
-            <option value="Account or subscription">Account or subscription</option>
-            <option value="Billing or payment">Billing or payment</option>
-            <option value="Technical support">Technical support</option>
-            <option value="Other">Other</option>
-          </select>
-        </label>
+        <p class="freedom-note">Tell us about any concern in your own words. You do not need to choose a category. Our support team can review requests that the automated assistant cannot answer.</p>
         <button class="primary" type="submit">Start a conversation <span>→</span></button>
         <p class="fine">By continuing, you agree that we may use your name and email to respond to this support request. Please don't send passwords or payment-card details.</p>
       </form>
@@ -44,17 +35,18 @@
         <span class="live-pill"><i></i> Live support</span>
       </div>
       <div id="messages" class="messages" aria-live="polite"></div>
-      <div class="faq-strip"><span>Quick help:</span><button data-faq="hours">Support hours</button><button data-faq="billing">Billing</button><button data-faq="account">Account help</button></div>
-      <form id="message-form" class="composer">
-        <input id="message-input" maxlength="2000" autocomplete="off" placeholder="Write your message…" required>
+      <div class="faq-strip"><span>Optional quick help:</span><button type="button" data-faq="hours">Support hours</button><button type="button" data-faq="billing">Billing</button><button type="button" data-faq="account">Account help</button></div>
+      <form id="message-form" class="composer guest-composer">
+        <textarea id="message-input" maxlength="10000" rows="3" autocomplete="off" placeholder="Describe your concern in your own words…" aria-label="Your message" required></textarea>
         <button class="primary send" type="submit" aria-label="Send message">Send ↑</button>
       </form>
+      <p id="message-count" class="message-count">0 / 10,000 characters</p>
       <p class="fine">Never share passwords, one-time codes, or full payment-card numbers in chat.</p>
     </section>
 
     <section id="staff-login" class="panel staff-panel hidden">
-      <div class="eyebrow">TEAM ACCESS</div><h2>CSR sign in</h2>
-      <p class="muted small">Staff accounts are created and assigned roles by an administrator.</p>
+      <div class="eyebrow">TEAM ACCESS</div><h2>Administrator sign in</h2>
+      <p class="muted small">Private administrator access. Guest customers do not need an account.</p>
       <form id="staff-form" class="form">
         <label>Email<input id="staff-email" type="email" required autocomplete="username"></label>
         <label>Password<input id="staff-password" type="password" required autocomplete="current-password"></label>
@@ -64,11 +56,11 @@
     </section>
 
     <section id="inbox" class="panel inbox-panel hidden">
-      <div class="inbox-head"><div><div class="eyebrow">TEAM WORKSPACE</div><h2>CSR Inbox</h2><p id="staff-identity" class="muted small"></p></div><button id="signout" class="secondary">Sign out</button></div>
+      <div class="inbox-head"><div><div class="eyebrow">ADMIN WORKSPACE</div><h2>Support Inbox</h2><p id="staff-identity" class="muted small"></p></div><button id="signout" class="secondary">Sign out</button></div>
       <div class="inbox-grid">
         <aside><h3>Conversations</h3><div id="conversation-list" class="conversation-list"><p class="muted small">Loading conversations…</p></div></aside>
         <section class="agent-thread"><div id="agent-thread-title" class="thread-title">Select a conversation</div><div id="agent-messages" class="messages agent-messages"></div>
-          <form id="agent-message-form" class="composer"><input id="agent-message-input" maxlength="2000" placeholder="Reply to customer…" required><button class="primary send">Reply ↑</button></form>
+          <form id="agent-message-form" class="composer"><input id="agent-message-input" maxlength="10000" placeholder="Reply to customer…" required><button class="primary send">Reply ↑</button></form>
           <div class="agent-actions"><button id="resolve-chat" class="secondary" disabled>Mark resolved</button><button id="take-chat" class="secondary" disabled>Assign to me</button></div>
         </section>
       </div>
