@@ -63,6 +63,23 @@
       <p id="guest-upload-status" class="upload-status" aria-live="polite"></p>
       <p id="message-count" class="message-count">0 / 10,000 characters</p>
       <p class="fine">Never share passwords, one-time codes, or full payment-card numbers in chat.</p>
+      <section id="guest-rating-panel" class="rating-panel hidden" aria-labelledby="guest-rating-title">
+        <div class="eyebrow">CONVERSATION FEEDBACK</div>
+        <h3 id="guest-rating-title">How was your support experience?</h3>
+        <p class="muted small">Your conversation is resolved. Please rate the support you received.</p>
+        <div id="guest-rating-stars" class="rating-stars" role="group" aria-label="Choose a rating from 1 to 5 stars">
+          <button type="button" data-rating="1" aria-label="1 star">★</button>
+          <button type="button" data-rating="2" aria-label="2 stars">★</button>
+          <button type="button" data-rating="3" aria-label="3 stars">★</button>
+          <button type="button" data-rating="4" aria-label="4 stars">★</button>
+          <button type="button" data-rating="5" aria-label="5 stars">★</button>
+        </div>
+        <p id="guest-rating-label" class="rating-label">Select a rating</p>
+        <label class="rating-comment-label" for="guest-rating-comment">Optional comment</label>
+        <textarea id="guest-rating-comment" maxlength="500" rows="3" placeholder="Tell us what went well or what we can improve…"></textarea>
+        <button id="submit-guest-rating" class="primary" type="button" disabled>Submit feedback</button>
+        <p id="guest-rating-status" class="upload-status" aria-live="polite"></p>
+      </section>
     </section>
 
     <section id="staff-login" class="panel staff-panel hidden">
@@ -83,6 +100,12 @@
         <p id="analytics-status" class="analytics-status" aria-live="polite">Loading dashboard statistics…</p>
         <div id="analytics-cards" class="analytics-cards"></div>
         <div class="analytics-bottom"><div class="analytics-chart-wrap"><h4>New conversations · last 7 days</h4><div id="analytics-chart" class="analytics-chart"></div></div><div class="analytics-response"><h4>Average first human reply</h4><strong id="analytics-response-time">—</strong><p class="muted small">Based on conversations that received an administrator reply. Automated replies are excluded.</p></div></div>
+      </section>
+      <section class="csat-panel" aria-labelledby="csat-title">
+        <div class="csat-heading"><div><h3 id="csat-title">Customer satisfaction</h3><p class="muted small">Ratings and comments from resolved conversations</p></div><button id="refresh-csat" class="secondary" type="button">Refresh feedback</button></div>
+        <div class="csat-summary"><div class="csat-score"><strong id="csat-average">—</strong><span>Average rating</span></div><div class="csat-score"><strong id="csat-total">0</strong><span>Total ratings</span></div><div id="csat-distribution" class="csat-distribution"></div></div>
+        <div class="csat-feedback-wrap"><h4>Recent customer comments</h4><div id="csat-feedback" class="csat-feedback"><p class="muted small">No feedback yet.</p></div></div>
+        <p id="csat-status" class="analytics-status" aria-live="polite"></p>
       </section>
       <div class="inbox-grid">
         <aside><h3>Conversations</h3><div id="conversation-list" class="conversation-list"><p class="muted small">Loading conversations…</p></div></aside>

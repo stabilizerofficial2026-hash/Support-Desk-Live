@@ -45,6 +45,8 @@ let selectedConversation = null;
 let messageChannel = null;
 let listChannel = null;
 let attachmentChannel = null;
+let guestConversationChannel = null;
+let selectedGuestRating = 0;
 
 let guestName = "";
 
@@ -382,6 +384,93 @@ wireAttachmentPicker("guest-file", "customer", "guest-attachments", "guest-uploa
 wireAttachmentPicker("admin-file", "admin", "admin-attachments", "admin-upload-status");
 
 // ============================================
+// CUSTOMER SATISFACTION (GUEST)
+// Ratings are available only after a conversation is resolved.
+// ============================================
+const ratingLabels = {
+  1: "Poor", 2: "Fair", 3: "Okay", 4: "Good", 5: "Excellent"
+};
+
+function setGuestRating(value) {
+  selectedGuestRating = value;
+  document.querySelectorAll("#guest-rating-stars [data-rating]").forEach(button => {
+    const active = Number(button.dataset.rating) <= value;
+    button.classList.toggle("selected", active);
+    button.setAttribute("aria-pressed", String(Number(button.dataset.rating) === value));
+  });
+  if ($("guest-rating-label")) $("guest-rating-label").textContent = ratingLabels[value] || "Select a rating";
+  if ($("submit-guest-rating")) $("submit-guest-rating").disabled = !value;
+}
+
+async function refreshGuestRatingState(id) {
+  if (!id || !currentUser) return;
+  const { data: conversation, error: conversationError } = await db
+    .from("conversations").select("status").eq("id", id).maybeSingle();
+  if (conversationError) return;
+  if (conversation?.status !== "resolved") return;
+
+  const panel = $("guest-rating-panel");
+  if (!panel) return;
+  panel.classList.remove("hidden");
+
+  const { data: existing, error } = await db
+    .from("customer_satisfaction").select("rating,comment").eq("conversation_id", id).maybeSingle();
+  if (error) {
+    $("guest-rating-status").textContent = "Unable to load feedback status. Please refresh.";
+    return;
+  }
+  if (existing) {
+    setGuestRating(Number(existing.rating));
+    $("guest-rating-comment").value = existing.comment || "";
+    $("guest-rating-comment").disabled = true;
+    $("submit-guest-rating").disabled = true;
+    $("guest-rating-status").textContent = "Thank you. Your feedback has been recorded.";
+    document.querySelectorAll("#guest-rating-stars button").forEach(button => button.disabled = true);
+  } else {
+    $("guest-rating-status").textContent = "Your feedback helps us improve.";
+  }
+}
+
+function watchGuestConversation(id) {
+  if (guestConversationChannel) db.removeChannel(guestConversationChannel);
+  guestConversationChannel = db.channel("guest-conversation-" + id)
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: "id=eq." + id }, payload => {
+      if (payload.new.status === "resolved") refreshGuestRatingState(id);
+    }).subscribe();
+}
+
+document.querySelectorAll("#guest-rating-stars [data-rating]").forEach(button => {
+  button.addEventListener("click", () => setGuestRating(Number(button.dataset.rating)));
+});
+
+if ($("submit-guest-rating")) {
+  $("submit-guest-rating").addEventListener("click", async () => {
+    if (!conversationId || !currentUser || !selectedGuestRating) return;
+    const submit = $("submit-guest-rating");
+    setBusy(submit, true, "Submitting…");
+    try {
+      const comment = $("guest-rating-comment").value.trim();
+      const { error } = await db.from("customer_satisfaction").insert({
+        conversation_id: conversationId,
+        guest_user_id: currentUser.id,
+        rating: selectedGuestRating,
+        comment: comment || null
+      });
+      if (error) throw error;
+      $("guest-rating-comment").disabled = true;
+      document.querySelectorAll("#guest-rating-stars button").forEach(button => button.disabled = true);
+      $("guest-rating-status").textContent = "Thank you. Your feedback has been recorded.";
+    } catch (error) {
+      $("guest-rating-status").textContent = error.code === "23505" ? "A rating has already been submitted for this conversation." : "Feedback not submitted: " + error.message;
+    } finally {
+      setBusy(submit, false);
+      if ($( "guest-rating-status").textContent.includes("recorded") || $("guest-rating-comment").disabled) submit.disabled = true;
+      else submit.disabled = !selectedGuestRating;
+    }
+  });
+}
+
+// ============================================
 // GUEST START CONVERSATION
 // ============================================
 
@@ -469,6 +558,8 @@ if ($("guest-form")) {
         );
         await loadAttachments(conversationId, $("guest-attachments"));
         watchAttachments(conversationId, $("guest-attachments"));
+        watchGuestConversation(conversationId);
+        await refreshGuestRatingState(conversationId);
 
         addBubble(
           $("messages"),
@@ -749,7 +840,52 @@ async function loadAnalytics() {
   }
   renderAnalytics(data || {});
   if (status) status.textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  await loadCsatAnalytics();
 }
+
+function renderCsatAnalytics(data) {
+  if ($("csat-average")) $("csat-average").textContent = data.average_rating == null ? "—" : Number(data.average_rating).toFixed(2) + " / 5";
+  if ($("csat-total")) $("csat-total").textContent = Number(data.total_ratings || 0).toLocaleString();
+  const distribution = $("csat-distribution");
+  if (distribution) {
+    distribution.innerHTML = "";
+    for (let score = 5; score >= 1; score--) {
+      const line = document.createElement("div"); line.className = "csat-dist-row";
+      const label = document.createElement("span"); label.textContent = score + " ★";
+      const track = document.createElement("div"); track.className = "csat-track";
+      const fill = document.createElement("div"); fill.className = "csat-fill";
+      const count = Number(data[(["","one_star","two_star","three_star","four_star","five_star"])[score]] || 0);
+      const total = Math.max(1, Number(data.total_ratings || 0));
+      fill.style.width = (count / total * 100) + "%"; track.append(fill);
+      const value = document.createElement("small"); value.textContent = count;
+      line.append(label, track, value); distribution.append(line);
+    }
+  }
+  const feedback = $("csat-feedback");
+  if (feedback) {
+    feedback.innerHTML = "";
+    const rows = Array.isArray(data.recent_feedback) ? data.recent_feedback : [];
+    if (!rows.length) { const empty = document.createElement("p"); empty.className = "muted small"; empty.textContent = "No written feedback yet."; feedback.append(empty); }
+    rows.forEach(item => {
+      const card = document.createElement("article"); card.className = "csat-comment";
+      const head = document.createElement("strong"); head.textContent = "★".repeat(Number(item.rating)) + "☆".repeat(5 - Number(item.rating));
+      const body = document.createElement("p"); body.textContent = item.comment || "";
+      const date = document.createElement("small"); date.textContent = new Date(item.created_at).toLocaleString();
+      card.append(head, body, date); feedback.append(card);
+    });
+  }
+}
+
+async function loadCsatAnalytics() {
+  const status = $("csat-status");
+  if (status) status.textContent = "Loading customer feedback…";
+  const { data, error } = await db.rpc("admin_get_csat_analytics");
+  if (error) { if (status) status.textContent = "Feedback unavailable: " + error.message; return; }
+  renderCsatAnalytics(data || {});
+  if (status) status.textContent = "Feedback updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+if ($("refresh-csat")) $("refresh-csat").addEventListener("click", loadCsatAnalytics);
 
 if ($("refresh-analytics")) {
   $("refresh-analytics").addEventListener("click", loadAnalytics);
