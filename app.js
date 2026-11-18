@@ -250,8 +250,7 @@ if ($("guest-form")) {
         const email =
           $("guest-email").value.trim();
 
-        const topic =
-          $("guest-topic").value;
+        const topic = "Open conversation";
 
         if (!name || !email) {
           throw new Error(
@@ -349,6 +348,11 @@ if ($("message-form")) {
         return;
       }
 
+      if (body.length > 10000) {
+        alert("Please keep your message under 10,000 characters.");
+        return;
+      }
+
       const button = $("message-form")
         .querySelector('button[type="submit"]');
 
@@ -366,6 +370,9 @@ if ($("message-form")) {
         if (error) throw error;
 
         input.value = "";
+        if ($("message-count")) {
+          $("message-count").textContent = "0 / 10,000 characters";
+        }
 
       } catch (error) {
         alert(
@@ -377,6 +384,18 @@ if ($("message-form")) {
       }
     }
   );
+}
+
+
+// Live character count for the open guest message composer.
+if ($("message-input") && $("message-count")) {
+  const updateMessageCount = () => {
+    $("message-count").textContent =
+      $("message-input").value.length.toLocaleString() +
+      " / 10,000 characters";
+  };
+  $("message-input").addEventListener("input", updateMessageCount);
+  updateMessageCount();
 }
 
 
