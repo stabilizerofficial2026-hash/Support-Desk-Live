@@ -659,7 +659,7 @@ if ($("staff-form")) {
             " · Administrator";
         }
 
-        await loadInbox();
+        await Promise.all([loadInbox(), loadAnalytics()]);
 
       } catch (error) {
         showError(
@@ -671,6 +671,88 @@ if ($("staff-form")) {
       }
     }
   );
+}
+
+
+// ============================================
+// ADMIN ANALYTICS
+// All figures are returned by an admin-only RPC.
+// ============================================
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return "Not enough data";
+  const value = Math.max(0, Math.round(Number(seconds)));
+  if (value < 60) return value + " sec";
+  if (value < 3600) return Math.floor(value / 60) + " min";
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  return hours + " hr" + (minutes ? " " + minutes + " min" : "");
+}
+
+function renderAnalytics(data) {
+  const cards = $("analytics-cards");
+  if (!cards) return;
+  const items = [
+    ["All conversations", data.total_conversations],
+    ["Queued", data.queued_conversations],
+    ["Open", data.open_conversations],
+    ["Pending", data.pending_conversations],
+    ["Resolved", data.resolved_conversations],
+    ["New today", data.new_today],
+    ["Customer messages", data.customer_messages],
+    ["Human replies", data.admin_replies]
+  ];
+  cards.innerHTML = "";
+  items.forEach(([label, value]) => {
+    const card = document.createElement("div");
+    card.className = "analytics-card";
+    const number = document.createElement("strong");
+    number.textContent = Number(value || 0).toLocaleString();
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    card.append(number, caption);
+    cards.append(card);
+  });
+
+  const response = $("analytics-response-time");
+  if (response) response.textContent = formatDuration(data.avg_first_response_seconds);
+
+  const chart = $("analytics-chart");
+  if (chart) {
+    chart.innerHTML = "";
+    const days = Array.isArray(data.daily_conversations) ? data.daily_conversations : [];
+    const max = Math.max(1, ...days.map(item => Number(item.count || 0)));
+    days.forEach(item => {
+      const column = document.createElement("div");
+      column.className = "analytics-day";
+      const bar = document.createElement("div");
+      bar.className = "analytics-bar";
+      bar.style.height = Math.max(4, (Number(item.count || 0) / max) * 100) + "%";
+      bar.title = Number(item.count || 0) + " conversations";
+      const count = document.createElement("span");
+      count.textContent = Number(item.count || 0);
+      const day = document.createElement("small");
+      const date = new Date(item.day + "T12:00:00");
+      day.textContent = date.toLocaleDateString([], { weekday: "short" });
+      column.append(count, bar, day);
+      chart.append(column);
+    });
+  }
+}
+
+async function loadAnalytics() {
+  const status = $("analytics-status");
+  if (status) status.textContent = "Refreshing dashboard statistics…";
+  const { data, error } = await db.rpc("admin_get_analytics");
+  if (error) {
+    if (status) status.textContent = "Analytics unavailable: " + error.message;
+    return;
+  }
+  renderAnalytics(data || {});
+  if (status) status.textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+if ($("refresh-analytics")) {
+  $("refresh-analytics").addEventListener("click", loadAnalytics);
 }
 
 

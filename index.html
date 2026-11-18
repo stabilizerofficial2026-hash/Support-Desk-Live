@@ -55,10 +55,12 @@
       </div>
       <div id="messages" class="messages" aria-live="polite"></div>
       <div class="faq-strip"><span>Optional quick help:</span><button type="button" data-faq="hours">Support hours</button><button type="button" data-faq="billing">Billing</button><button type="button" data-faq="account">Account help</button></div>
+      <div class="attachment-area"><div class="attachment-head"><b>Files in this conversation</b><span>Private · up to 5 MB each</span></div><div id="guest-attachments" class="attachment-list"></div></div>
       <form id="message-form" class="composer guest-composer">
         <textarea id="message-input" maxlength="10000" rows="3" autocomplete="off" placeholder="Describe your concern in your own words…" aria-label="Your message" required></textarea>
-        <button class="primary send" type="submit" aria-label="Send message">Send ↑</button>
+        <div class="composer-tools"><label class="file-button" for="guest-file">＋ Attach file</label><input id="guest-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"><button class="primary send" type="submit" aria-label="Send message">Send ↑</button></div>
       </form>
+      <p id="guest-upload-status" class="upload-status" aria-live="polite"></p>
       <p id="message-count" class="message-count">0 / 10,000 characters</p>
       <p class="fine">Never share passwords, one-time codes, or full payment-card numbers in chat.</p>
     </section>
@@ -76,10 +78,17 @@
 
     <section id="inbox" class="panel inbox-panel hidden">
       <div class="inbox-head"><div><div class="eyebrow">ADMIN WORKSPACE</div><h2>Support Inbox</h2><p id="staff-identity" class="muted small"></p></div><button id="signout" class="secondary">Sign out</button></div>
+      <section class="analytics-panel" aria-labelledby="analytics-title">
+        <div class="analytics-heading"><div><h3 id="analytics-title">Dashboard overview</h3><p class="muted small">Live support activity and response performance</p></div><button id="refresh-analytics" class="secondary" type="button">Refresh stats</button></div>
+        <p id="analytics-status" class="analytics-status" aria-live="polite">Loading dashboard statistics…</p>
+        <div id="analytics-cards" class="analytics-cards"></div>
+        <div class="analytics-bottom"><div class="analytics-chart-wrap"><h4>New conversations · last 7 days</h4><div id="analytics-chart" class="analytics-chart"></div></div><div class="analytics-response"><h4>Average first human reply</h4><strong id="analytics-response-time">—</strong><p class="muted small">Based on conversations that received an administrator reply. Automated replies are excluded.</p></div></div>
+      </section>
       <div class="inbox-grid">
         <aside><h3>Conversations</h3><div id="conversation-list" class="conversation-list"><p class="muted small">Loading conversations…</p></div></aside>
         <section class="agent-thread"><div id="agent-thread-title" class="thread-title">Select a conversation</div><div id="agent-messages" class="messages agent-messages"></div>
-          <form id="agent-message-form" class="composer"><input id="agent-message-input" maxlength="10000" placeholder="Reply to customer…" required><button class="primary send">Reply ↑</button></form>
+          <div class="attachment-area agent-attachment-area"><div class="attachment-head"><b>Files in this conversation</b><span>Private · up to 5 MB each</span></div><div id="admin-attachments" class="attachment-list"></div></div><form id="agent-message-form" class="composer"><input id="agent-message-input" maxlength="10000" placeholder="Reply to customer…" required><div class="composer-tools"><label class="file-button" for="admin-file">＋ Attach file</label><input id="admin-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"><button class="primary send">Reply ↑</button></div></form>
+          <p id="admin-upload-status" class="upload-status" aria-live="polite"></p>
           <div class="agent-actions"><button id="resolve-chat" class="secondary" disabled>Mark resolved</button><button id="take-chat" class="secondary" disabled>Assign to me</button></div>
         </section>
       </div>
