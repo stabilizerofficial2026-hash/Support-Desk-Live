@@ -25,6 +25,107 @@ const db = configured
 
 const $ = id => document.getElementById(id);
 
+// ============================================
+// ANDROID PWA + WEB PUSH NOTIFICATIONS
+// ============================================
+const PUSH_VAPID_PUBLIC_KEY = "BGsGHFLaucOnqORqYEDTtTVHrBNOdI4knPk-xfWlJDAmfzi-UaMSBxT_JaBJBGrQG2bYIJcYuRv04TmgRKFlR9A";
+let supportDeskServiceWorker = null;
+
+function pushStatus(message, isError = false) {
+  const el = $("push-status");
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? "#b42318" : "";
+}
+
+function base64UrlToBytes(value) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(char => char.charCodeAt(0)));
+}
+
+async function registerSupportDeskServiceWorker() {
+  if (!("serviceWorker" in navigator)) return null;
+  try {
+    supportDeskServiceWorker = await navigator.serviceWorker.register("./sw.js");
+    return supportDeskServiceWorker;
+  } catch (error) {
+    console.error("Service worker registration failed:", error);
+    return null;
+  }
+}
+
+async function enableSupportDeskPush() {
+  const button = $("enable-push");
+  if (!db || !currentUser) {
+    pushStatus("Please sign in as the administrator first.", true);
+    return;
+  }
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    pushStatus("This browser does not support web push. Please use an updated Chrome browser.", true);
+    return;
+  }
+  if (!window.isSecureContext) {
+    pushStatus("Push notifications require HTTPS. Open the secure Cloudflare Pages website.", true);
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Enabling…";
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      throw new Error("Notification permission was not granted. Allow notifications in Chrome site settings.");
+    }
+
+    const registration = supportDeskServiceWorker ||
+      await registerSupportDeskServiceWorker();
+    if (!registration) throw new Error("Could not register the notification service worker.");
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlToBytes(PUSH_VAPID_PUBLIC_KEY)
+      });
+    }
+
+    const payload = {
+      user_id: currentUser.id,
+      endpoint: subscription.endpoint,
+      subscription: subscription.toJSON(),
+      user_agent: navigator.userAgent
+    };
+
+    const { error } = await db
+      .from("staff_push_subscriptions")
+      .upsert(payload, { onConflict: "endpoint" });
+
+    if (error) throw error;
+
+    pushStatus("Notifications are enabled on this device. You can now receive new customer message alerts.");
+    if (button) button.textContent = "Notifications enabled";
+  } catch (error) {
+    console.error("Push subscription failed:", error);
+    pushStatus(error.message || "Could not enable notifications.", true);
+    if (button) button.textContent = "Try again";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+if ($("enable-push")) {
+  $("enable-push").addEventListener("click", enableSupportDeskPush);
+}
+window.addEventListener("load", () => {
+  registerSupportDeskServiceWorker();
+});
+
+
 const screens = [
   "welcome",
   "chat",
@@ -743,6 +844,8 @@ if ($("staff-form")) {
         currentUser = data.user;
 
         show("inbox");
+        if ($("enable-push")) $("enable-push").textContent = "Enable notifications";
+        pushStatus("Enable notifications to receive new customer messages on this device.");
 
         if ($("staff-identity")) {
           $("staff-identity").textContent =

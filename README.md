@@ -84,3 +84,43 @@ Cloudinary is not required for text chat. For production uploads, prefer a signe
 3. Add staff presence and supervisor dashboard.
 4. Add secure Cloudinary upload flow.
 5. Load-test with realistic concurrent connections.
+
+
+## Android PWA and staff push notifications
+
+This build adds an installable PWA shell and Android Chrome Web Push support. It does not replace the existing chat or its RPC functions.
+
+### Included changes
+- `manifest.webmanifest`, `sw.js`, and a 192px app icon.
+- An administrator-only **Enable notifications** button in the inbox.
+- Staff device subscriptions stored in `public.staff_push_subscriptions` with RLS.
+- Supabase Edge Function source at `supabase/functions/supportdesk-push/index.ts`.
+- VAPID public/private keys are stored in Supabase Vault. The private key is not included in this ZIP or browser code.
+
+### Remaining dashboard configuration
+The Supabase database and Edge Function are already prepared. To connect new customer messages to the function:
+
+1. Open Supabase Dashboard → **Database** → **Webhooks**.
+2. Create a webhook named `supportdesk-customer-message-push`.
+3. Table: `public.messages`; event: **INSERT**.
+4. Webhook destination: **Supabase Edge Function** → `supportdesk-push`; method **POST**.
+5. Add the authorization header using the dashboard's **Add auth header with service key** option. Keep JWT verification enabled.
+6. Create/save the webhook.
+
+The Edge Function ignores all inserts except public customer messages. It notifies the assigned active staff member; if the conversation is unassigned, it notifies active administrators and supervisors. Notification text is generic and does not reveal the customer's message on the lock screen.
+
+### Publish the website
+Deploy the contents of this folder to the existing Cloudflare Pages project (`support-desk-live.pages.dev`). Keep the site on HTTPS.
+
+### Enable on Android
+1. Open the website in updated Chrome.
+2. Sign in using the administrator account.
+3. Tap **Enable notifications** and allow Chrome notifications.
+4. Optional: Chrome menu → **Add to Home screen** / **Install app**.
+5. Send a test message from a separate customer browser/device.
+
+### Important
+- Push requires internet access and Android/Chrome notification permission.
+- Android battery optimization or vendor background restrictions can delay delivery.
+- The offline cache covers the app shell only; chat and Supabase data still require internet.
+- Do not put a Supabase service-role key or VAPID private key in frontend files.

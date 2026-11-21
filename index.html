@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#071b36">
   <meta name="description" content="Need assistance? We're happy to help. Connect with SupportDesk Live for customer support, automated assistance and secure conversations.">
   <meta name="application-name" content="SupportDesk Live">
+  <link rel="manifest" href="./manifest.webmanifest">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="SupportDesk Live">
   <meta property="og:title" content="SupportDesk Live – Customer Support">
@@ -94,7 +95,8 @@
     </section>
 
     <section id="inbox" class="panel inbox-panel hidden">
-      <div class="inbox-head"><div><div class="eyebrow">ADMIN WORKSPACE</div><h2>Support Inbox</h2><p id="staff-identity" class="muted small"></p></div><button id="signout" class="secondary">Sign out</button></div>
+      <div class="inbox-head"><div><div class="eyebrow">ADMIN WORKSPACE</div><h2>Support Inbox</h2><p id="staff-identity" class="muted small"></p></div><div class="push-controls"><button id="enable-push" class="secondary" type="button">Enable notifications</button><button id="signout" class="secondary" type="button">Sign out</button></div></div>
+      <p id="push-status" class="upload-status" role="status" aria-live="polite">Enable notifications to receive new customer messages on this device.</p>
       <section class="analytics-panel" aria-labelledby="analytics-title">
         <div class="analytics-heading"><div><h3 id="analytics-title">Dashboard overview</h3><p class="muted small">Live support activity and response performance</p></div><button id="refresh-analytics" class="secondary" type="button">Refresh stats</button></div>
         <p id="analytics-status" class="analytics-status" aria-live="polite">Loading dashboard statistics…</p>
