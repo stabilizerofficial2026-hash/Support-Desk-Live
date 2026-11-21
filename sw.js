@@ -25,9 +25,16 @@ self.addEventListener("push", event => {
     body: payload.body || "You have a new support update.",
     icon: "/favicon.png",
     badge: "/favicon.png",
-    tag: "supportdesk-new-message",
+    tag: payload.conversation_id
+      ? `supportdesk-conversation-${payload.conversation_id}`
+      : "supportdesk-new-message",
     renotify: true,
-    data: { url: payload.url || "/" }
+    timestamp: Date.now(),
+    data: {
+      url: payload.url || "/#agent",
+      conversation_id: payload.conversation_id || null,
+      sender_name: payload.sender_name || "A customer"
+    }
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });

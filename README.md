@@ -126,8 +126,12 @@ Deploy the contents of this folder to the existing Cloudflare Pages project (`su
 - Do not put a Supabase service-role key or VAPID private key in frontend files.
 
 
-### Administrator stay-signed-in behavior
+### Customer identity in Android push notifications
 
-The browser client explicitly enables Supabase session persistence in local storage and automatic token refresh. When the admin opens `/#agent`, the app checks the saved session and restores the inbox only if the account is still an active administrator. The user can still sign out using the Sign out button.
+The push Edge Function now looks up `guest_profiles.full_name` using the message `sender_id`. Android notifications display:
+- Title: `New message from [customer name]`
+- Body: a short preview of the customer's message (up to 120 characters)
+- Notification tag: conversation-specific, so different conversations remain distinguishable
+- Tap action: opens the staff dashboard (`/#agent`)
 
-A session can still end if the user signs out, clears Chrome site data, uses Incognito, browser storage is blocked/cleared, the account is disabled, or the server revokes the session. Do not enable persistent login on a shared/public phone. Keep the device screen lock enabled.
+If the customer profile has no name, the title falls back to `New message from A customer`. The database webhook must invoke the deployed `supportdesk-push` function for INSERTs into `public.messages`. Redeploy the Edge Function after updating it. This is a Progressive Web App (PWA), not a native APK; Chrome's Install app option depends on Chrome's installability checks.
