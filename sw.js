@@ -1,4 +1,4 @@
-const CACHE_NAME = "supportdesk-live-shell-v1";
+const CACHE_NAME = "supportdesk-live-shell-v2";
 const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/favicon.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", event => {
@@ -52,4 +52,28 @@ self.addEventListener("notificationclick", event => {
       return clients.openWindow(target);
     })
   );
+});
+
+
+// Same-origin fetch handling; network-first navigation keeps deployed updates fresh.
+self.addEventListener("fetch", event => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request).then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put("/", copy));
+        return response;
+      }).catch(async () => {
+        return (await caches.match(request)) || (await caches.match("/")) ||
+          new Response("SupportDesk Live is offline. Please reconnect.", {
+            status: 503,
+            headers: { "Content-Type": "text/plain; charset=utf-8" }
+          });
+      })
+    );
+  }
 });

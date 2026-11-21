@@ -135,3 +135,32 @@ The push Edge Function now looks up `guest_profiles.full_name` using the message
 - Tap action: opens the staff dashboard (`/#agent`)
 
 If the customer profile has no name, the title falls back to `New message from A customer`. The database webhook must invoke the deployed `supportdesk-push` function for INSERTs into `public.messages`. Redeploy the Edge Function after updating it. This is a Progressive Web App (PWA), not a native APK; Chrome's Install app option depends on Chrome's installability checks.
+
+
+## Combined update: admin session restore + sender-aware push alerts
+
+This package combines the administrator session persistence fix and sender-aware push notification update in the same codebase. Deploy all files together; do not mix individual files from older ZIPs.
+
+### Admin session behavior
+- Supabase Auth persists sessions in local storage and refreshes tokens automatically.
+- When opening `/#agent`, the app checks the saved session and validates that the user is still an active administrator before restoring the inbox.
+- The Sign out action still ends the session.
+- Clearing site data, using Incognito, revoking a session, or disabling the staff account will require signing in again.
+
+### Notification troubleshooting
+A browser message saying "Notifications enabled" means the browser permission and device subscription were saved. It does **not** prove the server has sent a push. Actual alerts also require:
+1. Both migrations in `supabase/migrations/` applied to the correct project.
+2. VAPID public/private keys stored in Supabase Vault; the public key in `app.js` must match the Vault public key exactly.
+3. `supportdesk-push` Edge Function deployed to the same Supabase project, with the service-role secret available only to the function runtime.
+4. A Database Webhook on `public.messages` for INSERT events, invoking the deployed function with the required authorization.
+5. A customer message inserted by the `guest_send_message` RPC with `sender_role = customer` and `visibility = public`.
+6. A valid staff subscription for an active admin/supervisor or assigned active agent.
+
+The function resolves the sender's display name from `guest_profiles.full_name` using the inserted message's `sender_id`, and sends a short message preview. If the function or webhook is not deployed/configured, no Android notification will arrive even though browser permission is allowed.
+
+### Android checks
+- Android Settings → Apps → Chrome (or installed SupportDesk app) → Notifications: allow notifications.
+- Android Settings → Apps → Chrome → Battery: allow background activity / unrestricted battery if the device provides that option.
+- Turn off Data Saver restrictions for Chrome if enabled.
+- Keep the phone connected to the internet for delivery.
+- Re-enable notifications from the admin page after deploying if the site data or service worker was cleared.
