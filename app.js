@@ -1582,12 +1582,30 @@ async function restoreAdminSession() {
   }
 }
 
+let autoAdminRouteChecked = false;
+
 function routePage() {
   if (location.hash === "#agent") {
     show("staff-login");
     restoreAdminSession();
-  } else {
-    show("welcome");
+    return;
+  }
+
+  show("welcome");
+
+  // If this device already has a saved non-anonymous session, reopen the
+  // staff dashboard automatically instead of leaving the admin at the
+  // customer welcome screen after Chrome/app restart.
+  if (!autoAdminRouteChecked && configured) {
+    autoAdminRouteChecked = true;
+    db.auth.getSession().then(({ data, error }) => {
+      const session = data?.session;
+      if (!error && session && !session.user.is_anonymous && location.hash !== "#agent") {
+        location.hash = "#agent";
+      }
+    }).catch(error => {
+      console.warn("Saved session check failed:", error);
+    });
   }
 }
 

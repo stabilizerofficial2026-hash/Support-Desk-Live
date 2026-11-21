@@ -164,3 +164,29 @@ The function resolves the sender's display name from `guest_profiles.full_name` 
 - Turn off Data Saver restrictions for Chrome if enabled.
 - Keep the phone connected to the internet for delivery.
 - Re-enable notifications from the admin page after deploying if the site data or service worker was cleared.
+
+
+## Android packaging preparation (latest update)
+
+This project folder now includes:
+- Valid PWA icon files at `/icons/icon-192.png`, `/icons/icon-512.png`, and `/icons/icon-512-maskable.png` (dark-cyan phone handset).
+- A manifest configured for standalone Android display, portrait orientation, and dark-cyan theme.
+- A versioned service worker that caches the icon assets and navigates to the staff inbox when a push notification is tapped.
+- Admin session auto-routing: when the site is opened at `/`, an existing saved non-anonymous session is routed to the administrator dashboard. The dashboard still validates that the account is active and has the admin role.
+- Push function source updated to include active administrators/supervisors and the assigned active agent, and to show the customer's name plus a short message preview.
+
+### Still required before live push works
+
+These source changes do not deploy themselves. The following must be completed in the existing Supabase project:
+1. Apply the two SQL migrations in `supabase/migrations/` after the original SupportDesk schema is present.
+2. Save the VAPID public/private keys in Supabase Vault using the exact secret names referenced in the migration.
+3. Deploy the `supportdesk-push` Edge Function and keep JWT verification enabled.
+4. Create the `public.messages` INSERT database webhook to call that function using Supabase's service-key authorization option.
+5. Confirm the administrator's device subscription row exists in `public.staff_push_subscriptions`.
+6. Send a customer test message and inspect the Edge Function logs and webhook delivery result.
+
+The website must be deployed over HTTPS. Android notification permission alone does not prove that server-side push delivery is configured. Do not expose the Supabase service-role key or VAPID private key in frontend files.
+
+### PWABuilder
+
+After deploying this folder to the existing Cloudflare Pages project, re-run the PWABuilder analysis against `https://support-desk-live.pages.dev/`. Confirm the manifest and icon checks pass before generating the Android package. The package still needs to be built and tested; this source ZIP is not itself an APK.

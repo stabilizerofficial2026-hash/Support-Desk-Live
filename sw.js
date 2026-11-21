@@ -1,5 +1,5 @@
-const CACHE_NAME = "supportdesk-live-shell-v2";
-const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/favicon.png", "/manifest.webmanifest"];
+const CACHE_NAME = "supportdesk-live-shell-v3";
+const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/favicon.png", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-512-maskable.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -23,8 +23,8 @@ self.addEventListener("push", event => {
   const title = payload.title || "SupportDesk Live";
   const options = {
     body: payload.body || "You have a new support update.",
-    icon: "/favicon.png",
-    badge: "/favicon.png",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
     tag: payload.conversation_id
       ? `supportdesk-conversation-${payload.conversation_id}`
       : "supportdesk-new-message",
@@ -43,10 +43,11 @@ self.addEventListener("notificationclick", event => {
   event.notification.close();
   const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then(windowClients => {
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(async windowClients => {
       for (const client of windowClients) {
-        if (client.url.startsWith(self.location.origin) && "focus" in client) {
-          return client.focus();
+        if (client.url.startsWith(self.location.origin)) {
+          if ("navigate" in client) await client.navigate(target);
+          if ("focus" in client) return client.focus();
         }
       }
       return clients.openWindow(target);
