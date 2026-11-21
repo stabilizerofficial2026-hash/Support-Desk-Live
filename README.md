@@ -126,40 +126,8 @@ Deploy the contents of this folder to the existing Cloudflare Pages project (`su
 - Do not put a Supabase service-role key or VAPID private key in frontend files.
 
 
-### Required one-time push setup (do not skip)
+### Administrator stay-signed-in behavior
 
-The ZIP contains the frontend and Edge Function, but it does **not** contain your private VAPID key or deploy anything to Supabase/Cloudflare automatically.
+The browser client explicitly enables Supabase session persistence in local storage and automatic token refresh. When the admin opens `/#agent`, the app checks the saved session and restores the inbox only if the account is still an active administrator. The user can still sign out using the Sign out button.
 
-1. Generate a VAPID key pair using the `web-push` package on a trusted computer or development environment (`npx web-push generate-vapid-keys`). Keep the **private** key secret. The public key must match `PUSH_VAPID_PUBLIC_KEY` near the top of `app.js`.
-2. In Supabase Dashboard → SQL Editor, save the three values in Vault (replace the placeholders; do not commit these values to Git):
-   ```sql
-   select vault.create_secret('YOUR_VAPID_PUBLIC_KEY', 'supportdesk_vapid_public');
-   select vault.create_secret('YOUR_VAPID_PRIVATE_KEY', 'supportdesk_vapid_private');
-   select vault.create_secret('YOUR_RANDOM_WEBHOOK_SECRET', 'supportdesk_push_hook_secret');
-   ```
-   The webhook secret is retained for future hardening; the current Edge Function is protected by Supabase Edge Function JWT verification and the webhook's service-role authorization header.
-3. Apply both SQL migrations in `supabase/migrations/` to the same Supabase project. Apply the existing project schema first so `staff_profiles`, `messages`, `conversations`, and `public.is_staff()` exist.
-4. Deploy `supabase/functions/supportdesk-push/` as an Edge Function named `supportdesk-push`. Ensure the function has access to `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (Supabase normally supplies these to deployed functions). Keep **Verify JWT** enabled.
-5. In Database → Webhooks, create the `messages` INSERT webhook described above and use Supabase's service-key authorization option. Do not paste the service-role key into `app.js`, HTML, or any public file.
-6. Deploy the complete ZIP contents to the root of your existing HTTPS Cloudflare Pages site. Do not deploy only the changed files; include `sw.js`, `manifest.webmanifest`, and the `icons/` folder.
-7. Test using a separate customer browser/device. Send a new public customer message and confirm an admin device receives the notification.
-
-### Install on Android (Chrome)
-
-1. Open `https://support-desk-live.pages.dev/` in Chrome (not an in-app browser).
-2. Sign in to the staff/admin dashboard.
-3. Tap **Enable notifications** and choose **Allow** when Chrome asks.
-4. In Chrome's ⋮ menu choose **Install app** or **Add to Home screen** (the wording varies by Chrome version).
-5. Open the installed SupportDesk icon once. You can then launch it from your home screen/app drawer.
-
-This is an installable website (PWA), **not an APK download**. Push notifications require HTTPS, an active internet connection, Chrome notification permission, the Supabase migrations/function/webhook configured above, and a subscribed staff device. Android battery/background restrictions may delay alerts. Notification delivery cannot be guaranteed when the device is offline or the OS restricts background activity.
-
-
-### Chrome install troubleshooting
-
-If Android Chrome shows "This app cannot be installed", deploy the latest `sw.js` with its fetch handler, then:
-- Open the site in Chrome directly (not an in-app browser).
-- Turn off Chrome's "Desktop site" option for this site.
-- Visit the homepage, reload it, and wait for the page to finish loading.
-- Close the site tab, reopen it, then check Chrome ⋮ for "Install app".
-- If Chrome still offers only "Create shortcut", use that as a temporary home-screen icon. It is a shortcut, not a standalone PWA installation.
+A session can still end if the user signs out, clears Chrome site data, uses Incognito, browser storage is blocked/cleared, the account is disabled, or the server revokes the session. Do not enable persistent login on a shared/public phone. Keep the device screen lock enabled.

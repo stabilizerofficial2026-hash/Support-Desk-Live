@@ -19,7 +19,16 @@ const configured = Boolean(
 const db = configured
   ? window.supabase.createClient(
       SUPABASE_URL,
-      SUPABASE_ANON_KEY
+      SUPABASE_ANON_KEY,
+      {
+        auth: {
+          // Keep the staff session across tab/app/browser restarts.
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: window.localStorage
+        }
+      }
     )
   : null;
 
@@ -842,6 +851,7 @@ if ($("staff-form")) {
         }
 
         currentUser = data.user;
+        adminRestoreAttempted = true;
 
         show("inbox");
         if ($("enable-push")) $("enable-push").textContent = "Enable notifications";
@@ -1512,9 +1522,65 @@ if ($("signout")) {
 // Admin: /#agent
 // ============================================
 
+let restoringAdminSession = false;
+let adminRestoreAttempted = false;
+
+async function restoreAdminSession() {
+  if (!configured || restoringAdminSession || adminRestoreAttempted) return;
+  restoringAdminSession = true;
+  adminRestoreAttempted = true;
+
+  try {
+    const { data: { session }, error } = await db.auth.getSession();
+    if (error) throw error;
+
+    if (!session || session.user.is_anonymous) {
+      show("staff-login");
+      return;
+    }
+
+    const { data: profile, error: profileError } = await db
+      .from("staff_profiles")
+      .select("display_name,role,active")
+      .eq("user_id", session.user.id)
+      .single();
+
+    if (profileError || !profile || profile.active !== true || profile.role !== "admin") {
+      await db.auth.signOut();
+      currentUser = null;
+      show("staff-login");
+      if ($("staff-error")) {
+        $("staff-error").textContent = "Your saved session is no longer authorized. Please sign in again.";
+      }
+      return;
+    }
+
+    currentUser = session.user;
+    show("inbox");
+
+    if ($("staff-identity")) {
+      $("staff-identity").textContent = profile.display_name + " · Administrator";
+    }
+
+    if ($("enable-push")) $("enable-push").textContent = "Enable notifications";
+    pushStatus("Your administrator session was restored. Notifications are device-specific.");
+
+    await Promise.all([loadInbox(), loadAnalytics(), loadMonthlyReports()]);
+  } catch (error) {
+    console.error("Could not restore administrator session:", error);
+    show("staff-login");
+    if ($("staff-error")) {
+      $("staff-error").textContent = "Could not restore your session. Please sign in again.";
+    }
+  } finally {
+    restoringAdminSession = false;
+  }
+}
+
 function routePage() {
   if (location.hash === "#agent") {
     show("staff-login");
+    restoreAdminSession();
   } else {
     show("welcome");
   }

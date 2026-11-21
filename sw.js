@@ -46,35 +46,3 @@ self.addEventListener("notificationclick", event => {
     })
   );
 });
-
-
-// Handle same-origin requests so Chrome can recognize and run the app shell
-// reliably while retaining a network-first experience for page navigation.
-self.addEventListener("fetch", event => {
-  const request = event.request;
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request).then(response => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put("/", copy));
-        return response;
-      }).catch(async () => {
-        return (await caches.match(request)) || (await caches.match("/")) ||
-          new Response("SupportDesk Live is offline. Please reconnect and try again.", {
-            status: 503,
-            headers: { "Content-Type": "text/plain; charset=utf-8" }
-          });
-      })
-    );
-    return;
-  }
-
-  if (["style", "script", "image", "font"].includes(request.destination)) {
-    event.respondWith(
-      caches.match(request).then(cached => cached || fetch(request))
-    );
-  }
-});
